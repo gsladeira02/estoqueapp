@@ -9,11 +9,11 @@ async function listarCategorias(req, res) {
 
 async function criarCategoria(req, res) {
   const { nome, descricao } = req.body
-  if (!nome) return res.status(400).json({ erro: 'Nome é obrigatório' })
+  if (!nome) return res.status(400).json({ erro: 'Nome e obrigatorio' })
   const { data, error } = await supabase
     .from('categorias').insert({ nome, descricao }).select().single()
   if (error) {
-    if (error.code === '23505') return res.status(409).json({ erro: 'Categoria já existe' })
+    if (error.code === '23505') return res.status(409).json({ erro: 'Categoria ja existe' })
     return res.status(500).json({ erro: 'Erro ao criar categoria' })
   }
   return res.status(201).json(data)
@@ -44,26 +44,35 @@ async function buscarPorId(req, res) {
   const { id } = req.params
   const { data: produto, error } = await supabase
     .from('produtos').select('*, categorias(id, nome)').eq('id', id).single()
-  if (error || !produto) return res.status(404).json({ erro: 'Produto não encontrado' })
+  if (error || !produto) return res.status(404).json({ erro: 'Produto nao encontrado' })
   const { data: posicoes } = await supabase
     .from('vw_posicao_estoque').select('*').eq('produto_id', id)
   return res.json({ ...produto, posicoes: posicoes || [] })
 }
 
 async function criar(req, res) {
-  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo } = req.body
+  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, valor_venda } = req.body
   if (!sku || !nome || !categoria_id || !tipo) {
-    return res.status(400).json({ erro: 'sku, nome, categoria_id e tipo são obrigatórios' })
+    return res.status(400).json({ erro: 'sku, nome, categoria_id e tipo sao obrigatorios' })
   }
   if (!['materia_prima', 'revenda', 'ambos'].includes(tipo)) {
     return res.status(400).json({ erro: 'tipo deve ser materia_prima, revenda ou ambos' })
   }
   const { data, error } = await supabase
     .from('produtos')
-    .insert({ sku, nome, descricao, categoria_id, tipo, unidade: unidade || 'un', estoque_minimo: estoque_minimo || 0 })
+    .insert({
+      sku,
+      nome,
+      descricao,
+      categoria_id,
+      tipo,
+      unidade: unidade || 'un',
+      estoque_minimo: estoque_minimo || 0,
+      valor_venda: valor_venda || 0
+    })
     .select('*, categorias(id, nome)').single()
   if (error) {
-    if (error.code === '23505') return res.status(409).json({ erro: 'SKU já cadastrado' })
+    if (error.code === '23505') return res.status(409).json({ erro: 'SKU ja cadastrado' })
     return res.status(500).json({ erro: 'Erro ao criar produto' })
   }
   return res.status(201).json(data)
@@ -71,7 +80,7 @@ async function criar(req, res) {
 
 async function atualizar(req, res) {
   const { id } = req.params
-  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, ativo } = req.body
+  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, ativo, valor_venda } = req.body
   const updates = {}
   if (sku !== undefined) updates.sku = sku
   if (nome !== undefined) updates.nome = nome
@@ -81,6 +90,7 @@ async function atualizar(req, res) {
   if (unidade !== undefined) updates.unidade = unidade
   if (estoque_minimo !== undefined) updates.estoque_minimo = estoque_minimo
   if (ativo !== undefined) updates.ativo = ativo
+  if (valor_venda !== undefined) updates.valor_venda = valor_venda
   const { error } = await supabase.from('produtos').update(updates).eq('id', id)
   if (error) return res.status(500).json({ erro: 'Erro ao atualizar produto' })
   return res.json({ mensagem: 'Produto atualizado com sucesso' })
