@@ -21,6 +21,12 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'EstoqueApp API rodando!' })
 })
 
+app.get('/gerar-hash/:senha', async (req, res) => {
+  const bcrypt = require('bcryptjs')
+  const hash = await bcrypt.hash(req.params.senha, 10)
+  res.json({ hash })
+})
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`)
 })
