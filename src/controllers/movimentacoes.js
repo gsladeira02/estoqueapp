@@ -32,7 +32,7 @@ async function listar(req, res) {
   if (data_fim) query = query.lte('criado_em', data_fim)
 
   const { data, error, count } = await query
-  if (error) return res.status(500).json({ erro: 'Erro ao listar movimentações' })
+  if (error) return res.status(500).json({ erro: 'Erro ao listar movimentacoes' })
   return res.json({ dados: data, total: count, pagina: Number(pagina), limite: Number(limite) })
 }
 
@@ -40,7 +40,7 @@ async function registrar(req, res) {
   const { produto_id, centro_id, tipo, quantidade, motivo, documento } = req.body
 
   if (!produto_id || !centro_id || !tipo || !quantidade) {
-    return res.status(400).json({ erro: 'produto_id, centro_id, tipo e quantidade são obrigatórios' })
+    return res.status(400).json({ erro: 'produto_id, centro_id, tipo e quantidade sao obrigatorios' })
   }
   if (!['entrada', 'saida', 'ajuste'].includes(tipo)) {
     return res.status(400).json({ erro: 'tipo deve ser entrada, saida ou ajuste' })
@@ -85,7 +85,10 @@ async function registrar(req, res) {
     `)
     .single()
 
-  if (error) return res.status(500).json({ erro: 'Erro ao registrar movimentação' })
+  if (error) {
+    console.error('ERRO MOVIMENTACAO:', JSON.stringify(error))
+    return res.status(500).json({ erro: error.message || 'Erro ao registrar movimentacao' })
+  }
 
   const { data: posicao } = await supabase
     .from('posicoes_estoque')
