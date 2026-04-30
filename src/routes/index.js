@@ -48,4 +48,10 @@ router.post('/transferencias', autenticar, transferencias.solicitar)
 router.patch('/transferencias/:id/resolver', autenticar, somenteAdmin, transferencias.resolver)
 router.patch('/transferencias/:id/cancelar', autenticar, transferencias.cancelar)
 
+const vendas = require('../controllers/vendas')
+
+router.get('/vendas', autenticar, somenteAdmin, vendas.listar)
+router.post('/vendas', autenticar, somenteAdmin, vendas.registrar)
+router.delete('/vendas/:id', autenticar, somenteAdmin, vendas.remover)
+
 module.exports = router
