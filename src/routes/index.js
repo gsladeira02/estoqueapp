@@ -42,6 +42,7 @@ router.put('/centros/:id', autenticar, somenteAdmin, estoques.atualizarCentro)
 router.get('/posicao', autenticar, estoques.posicaoEstoque)
 router.get('/painel', autenticar, somenteAdmin, estoques.painelGeral)
 
+router.get('/movimentacoes/alertas-validade', autenticar, movimentacoes.alertasValidade)
 router.get('/movimentacoes', autenticar, movimentacoes.listar)
 router.post('/movimentacoes', autenticar, verificarAcessoCentro, movimentacoes.registrar)
 
