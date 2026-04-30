@@ -1,7 +1,7 @@
 const supabase = require('../lib/supabase')
 
 async function listar(req, res) {
-  const { status, limite = 50, pagina = 1 } = req.query
+  const { status, limite = 50, pagina = 1, data_inicio, data_fim } = req.query
   const offset = (pagina - 1) * limite
   let query = supabase
     .from('transferencias')
@@ -10,6 +10,8 @@ async function listar(req, res) {
     .range(offset, offset + Number(limite) - 1)
   if (req.usuario.papel === 'operador') query = query.eq('solicitante_id', req.usuario.id)
   if (status) query = query.eq('status', status)
+  if (data_inicio) query = query.gte('solicitado_em', data_inicio)
+  if (data_fim) query = query.lte('solicitado_em', data_fim)
   const { data, error, count } = await query
   if (error) return res.status(500).json({ erro: 'Erro ao listar transferencias' })
   return res.json({ dados: data, total: count, pagina: Number(pagina), limite: Number(limite) })
