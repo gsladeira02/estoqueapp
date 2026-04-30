@@ -34,7 +34,7 @@ async function listar(req, res) {
   if (ativo !== 'todos') query = query.eq('ativo', ativo === 'true')
   if (categoria_id) query = query.eq('categoria_id', categoria_id)
   if (tipo) query = query.eq('tipo', tipo)
-  if (busca) query = query.or(`nome.ilike.%${busca}%,sku.ilike.%${busca}%`)
+  if (busca) query = query.or('nome.ilike.%' + busca + '%,sku.ilike.%' + busca + '%')
   const { data, error } = await query
   if (error) return res.status(500).json({ erro: 'Erro ao listar produtos' })
   return res.json(data)
@@ -91,7 +91,9 @@ async function atualizar(req, res) {
   if (estoque_minimo !== undefined) updates.estoque_minimo = estoque_minimo
   if (ativo !== undefined) updates.ativo = ativo
   if (valor_venda !== undefined) updates.valor_venda = valor_venda
-  const { error } = await supabase.from('produtos').update(updates).eq('id', id)
+  console.log('UPDATE produto id:', id, 'updates:', JSON.stringify(updates))
+  const { data: updated, error } = await supabase.from('produtos').update(updates).eq('id', id).select()
+  console.log('UPDATE resultado:', JSON.stringify(updated), 'ERROR:', JSON.stringify(error))
   if (error) return res.status(500).json({ erro: 'Erro ao atualizar produto' })
   return res.json({ mensagem: 'Produto atualizado com sucesso' })
 }
