@@ -9,6 +9,8 @@ const produtos = require('../controllers/produtos')
 const movimentacoes = require('../controllers/movimentacoes')
 const transferencias = require('../controllers/transferencias')
 const estoques = require('../controllers/estoques')
+const vendas = require('../controllers/vendas')
+const historico = require('../controllers/historico')
 
 router.post('/auth/login', auth.login)
 router.get('/auth/perfil', autenticar, auth.meuPerfil)
@@ -48,10 +50,10 @@ router.post('/transferencias', autenticar, transferencias.solicitar)
 router.patch('/transferencias/:id/resolver', autenticar, somenteAdmin, transferencias.resolver)
 router.patch('/transferencias/:id/cancelar', autenticar, transferencias.cancelar)
 
-const vendas = require('../controllers/vendas')
-
 router.get('/vendas', autenticar, somenteAdmin, vendas.listar)
 router.post('/vendas', autenticar, somenteAdmin, vendas.registrar)
 router.delete('/vendas/:id', autenticar, somenteAdmin, vendas.remover)
+
+router.get('/historico', autenticar, somenteAdmin, historico.listar)
 
 module.exports = router
