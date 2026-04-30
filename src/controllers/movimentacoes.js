@@ -7,7 +7,7 @@ async function listar(req, res) {
   let query = supabase
     .from('movimentacoes')
     .select(`
-      id, tipo, quantidade, motivo, documento, criado_em,
+      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total,
       produtos(id, sku, nome, unidade),
       centros(id, nome, estoques(nome)),
       usuarios(id, nome)
@@ -37,7 +37,7 @@ async function listar(req, res) {
 }
 
 async function registrar(req, res) {
-  const { produto_id, centro_id, tipo, quantidade, motivo, documento } = req.body
+  const { produto_id, centro_id, tipo, quantidade, motivo, documento, custo_unitario, data_validade } = req.body
 
   if (!produto_id || !centro_id || !tipo || !quantidade) {
     return res.status(400).json({ erro: 'produto_id, centro_id, tipo e quantidade sao obrigatorios' })
@@ -77,9 +77,11 @@ async function registrar(req, res) {
       quantidade: Number(quantidade),
       motivo,
       documento,
+      custo_unitario: custo_unitario ? Number(custo_unitario) : null,
+      data_validade: data_validade || null,
     })
     .select(`
-      id, tipo, quantidade, motivo, documento, criado_em,
+      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total,
       produtos(sku, nome, unidade),
       centros(nome, estoques(nome))
     `)
@@ -103,4 +105,53 @@ async function registrar(req, res) {
   })
 }
 
-module.exports = { listar, registrar }
+async function alertasValidade(req, res) {
+  const { dias = 30 } = req.query
+  const hoje = new Date()
+  const limite = new Date()
+  limite.setDate(hoje.getDate() + Number(dias))
+
+  const hojeStr = hoje.toISOString().split('T')[0]
+  const limiteStr = limite.toISOString().split('T')[0]
+
+  let query = supabase
+    .from('movimentacoes')
+    .select(`
+      id, tipo, quantidade, data_validade, criado_em,
+      produtos(id, nome, unidade),
+      centros(id, nome, estoques(nome))
+    `)
+    .eq('tipo', 'entrada')
+    .not('data_validade', 'is', null)
+    .lte('data_validade', limiteStr)
+    .gte('data_validade', hojeStr)
+    .order('data_validade', { ascending: true })
+
+  if (req.usuario.papel === 'operador') {
+    const { data: acessos } = await supabase
+      .from('acesso_centros')
+      .select('centro_id')
+      .eq('usuario_id', req.usuario.id)
+    const ids = (acessos || []).map(a => a.centro_id)
+    if (ids.length === 0) return res.json([])
+    query = query.in('centro_id', ids)
+  }
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ erro: 'Erro ao buscar alertas de validade' })
+
+  const vencidos = await supabase
+    .from('movimentacoes')
+    .select(`id, tipo, quantidade, data_validade, criado_em, produtos(id, nome, unidade), centros(id, nome, estoques(nome))`)
+    .eq('tipo', 'entrada')
+    .not('data_validade', 'is', null)
+    .lt('data_validade', hojeStr)
+    .order('data_validade', { ascending: true })
+
+  return res.json({
+    vencendo: data || [],
+    vencidos: vencidos.data || []
+  })
+}
+
+module.exports = { listar, registrar, alertasValidade }
