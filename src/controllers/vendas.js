@@ -6,12 +6,12 @@ async function listar(req, res) {
 
   let query = supabase
     .from('vendas')
-    .select(`id, quantidade, valor_unitario, valor_total, observacao, criado_em, produtos(id, nome, unidade), centros(id, nome, estoques(nome)), usuarios(id, nome)`, { count: 'exact' })
-    .order('criado_em', { ascending: false })
+    .select(`id, quantidade, valor_unitario, valor_total, observacao, data_venda, criado_em, produtos(id, nome, unidade), centros(id, nome, estoques(nome)), usuarios(id, nome)`, { count: 'exact' })
+    .order('data_venda', { ascending: false })
     .range(offset, offset + Number(limite) - 1)
 
-  if (data_inicio) query = query.gte('criado_em', data_inicio)
-  if (data_fim) query = query.lte('criado_em', data_fim)
+  if (data_inicio) query = query.gte('data_venda', data_inicio)
+  if (data_fim) query = query.lte('data_venda', data_fim)
 
   const { data, error, count } = await query
   if (error) return res.status(500).json({ erro: 'Erro ao listar vendas' })
@@ -19,23 +19,37 @@ async function listar(req, res) {
 }
 
 async function registrar(req, res) {
-  const { produto_id, centro_id, quantidade, valor_unitario, observacao } = req.body
+  const { produto_id, centro_id, quantidade, valor_unitario, observacao, data_venda } = req.body
+
   if (!produto_id || !centro_id || !quantidade || !valor_unitario) {
     return res.status(400).json({ erro: 'produto_id, centro_id, quantidade e valor_unitario sao obrigatorios' })
   }
   if (Number(quantidade) <= 0) {
     return res.status(400).json({ erro: 'Quantidade deve ser maior que zero' })
   }
+
   const valor_total = Number(quantidade) * Number(valor_unitario)
+
   const { data, error } = await supabase
     .from('vendas')
-    .insert({ produto_id, centro_id, usuario_id: req.usuario.id, quantidade: Number(quantidade), valor_unitario: Number(valor_unitario), valor_total, observacao })
-    .select(`id, quantidade, valor_unitario, valor_total, observacao, criado_em, produtos(nome, unidade), centros(nome, estoques(nome))`)
+    .insert({
+      produto_id,
+      centro_id,
+      usuario_id: req.usuario.id,
+      quantidade: Number(quantidade),
+      valor_unitario: Number(valor_unitario),
+      valor_total,
+      observacao,
+      data_venda: data_venda || new Date().toISOString().split('T')[0]
+    })
+    .select(`id, quantidade, valor_unitario, valor_total, observacao, data_venda, criado_em, produtos(nome, unidade), centros(nome, estoques(nome))`)
     .single()
+
   if (error) {
     console.error('ERRO VENDA:', JSON.stringify(error))
     return res.status(500).json({ erro: 'Erro ao registrar venda' })
   }
+
   return res.status(201).json(data)
 }
 
