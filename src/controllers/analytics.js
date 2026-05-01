@@ -14,6 +14,8 @@ async function mediaConsumo(req, res) {
       .from('vw_posicao_estoque')
       .select('produto_id, produto, unidade, quantidade')
 
+    const diasSemana = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
+
     const porProduto = {}
     vendas.forEach(v => {
       if (!porProduto[v.produto_id]) {
@@ -21,13 +23,16 @@ async function mediaConsumo(req, res) {
           produto_id: v.produto_id,
           nome: v.produtos?.nome,
           unidade: v.produtos?.unidade,
-          vendas: []
+          vendas: [],
+          por_dia_semana: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+          contagem_dia_semana: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
         }
       }
-      porProduto[v.produto_id].vendas.push({
-        quantidade: Number(v.quantidade),
-        data: new Date(v.criado_em)
-      })
+      const data = new Date(v.criado_em)
+      const diaSemana = data.getDay()
+      porProduto[v.produto_id].vendas.push({ quantidade: Number(v.quantidade), data })
+      porProduto[v.produto_id].por_dia_semana[diaSemana] += Number(v.quantidade)
+      porProduto[v.produto_id].contagem_dia_semana[diaSemana] += 1
     })
 
     const hoje = new Date()
@@ -48,6 +53,14 @@ async function mediaConsumo(req, res) {
         ? new Date(hoje.getTime() + diasRestantes * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         : null
 
+      const consumoPorDiaSemana = Object.entries(p.por_dia_semana).map(([dia, total]) => ({
+        dia: Number(dia),
+        nome: diasSemana[Number(dia)],
+        total: Number(total.toFixed(3)),
+        media: p.contagem_dia_semana[dia] > 0 ? Number((total / p.contagem_dia_semana[dia]).toFixed(3)) : 0,
+        ocorrencias: p.contagem_dia_semana[dia]
+      }))
+
       return {
         produto_id: p.produto_id,
         nome: p.nome,
@@ -59,6 +72,7 @@ async function mediaConsumo(req, res) {
         media_mensal: Number(mediaMensal.toFixed(3)),
         dias_restantes: diasRestantes,
         previsao_fim: previsaoFim,
+        consumo_por_dia_semana: consumoPorDiaSemana,
         status: diasRestantes === null ? 'sem_consumo'
           : diasRestantes <= 7 ? 'critico'
           : diasRestantes <= 30 ? 'atencao'
