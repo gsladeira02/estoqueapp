@@ -57,4 +57,7 @@ router.delete('/vendas/:id', autenticar, somenteAdmin, vendas.remover)
 
 router.get('/historico', autenticar, somenteAdmin, historico.listar)
 
+const analytics = require('../controllers/analytics')
+router.get('/analytics/media-consumo', autenticar, somenteAdmin, analytics.mediaConsumo)
+
 module.exports = router
