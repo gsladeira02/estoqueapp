@@ -95,6 +95,8 @@ async function mediaConsumo(req, res) {
 
 async function sugestaoCompras(req, res) {
   try {
+    const { estoque_id } = req.query
+
     const { data: produtos, error: erroProdutos } = await supabase
       .from('produtos')
       .select('id, nome, unidade, estoque_minimo')
@@ -102,17 +104,23 @@ async function sugestaoCompras(req, res) {
 
     if (erroProdutos) return res.status(500).json({ erro: 'Erro ao buscar produtos' })
 
-    const { data: posicoes } = await supabase
+    let posicaoQuery = supabase
       .from('vw_posicao_estoque')
-      .select('produto_id, quantidade')
+      .select('produto_id, quantidade, estoque_id')
+
+    if (estoque_id) posicaoQuery = posicaoQuery.eq('estoque_id', estoque_id)
+
+    const { data: posicoes } = await posicaoQuery
 
     const umaSemanaAtras = new Date()
     umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7)
 
-    const { data: vendasSemana } = await supabase
+    let vendasQuery = supabase
       .from('vendas')
-      .select('produto_id, quantidade')
+      .select('produto_id, quantidade, centros(estoque_id)')
       .gte('data_venda', umaSemanaAtras.toISOString().split('T')[0])
+
+    const { data: vendasSemana } = await vendasQuery
 
     const estoqueMap = {}
     posicoes?.forEach(p => {
@@ -122,6 +130,7 @@ async function sugestaoCompras(req, res) {
 
     const vendasSemanaMap = {}
     vendasSemana?.forEach(v => {
+      if (estoque_id && v.centros?.estoque_id !== estoque_id) return
       if (!vendasSemanaMap[v.produto_id]) vendasSemanaMap[v.produto_id] = 0
       vendasSemanaMap[v.produto_id] += Number(v.quantidade)
     })
