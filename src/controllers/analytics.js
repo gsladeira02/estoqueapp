@@ -93,4 +93,74 @@ async function mediaConsumo(req, res) {
   }
 }
 
-module.exports = { mediaConsumo }
+async function sugestaoCompras(req, res) {
+  try {
+    const { data: produtos, error: erroProdutos } = await supabase
+      .from('produtos')
+      .select('id, nome, unidade, estoque_minimo')
+      .eq('ativo', true)
+
+    if (erroProdutos) return res.status(500).json({ erro: 'Erro ao buscar produtos' })
+
+    const { data: posicoes } = await supabase
+      .from('vw_posicao_estoque')
+      .select('produto_id, quantidade')
+
+    const umaSemanaAtras = new Date()
+    umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7)
+
+    const { data: vendasSemana } = await supabase
+      .from('vendas')
+      .select('produto_id, quantidade')
+      .gte('data_venda', umaSemanaAtras.toISOString().split('T')[0])
+
+    const estoqueMap = {}
+    posicoes?.forEach(p => {
+      if (!estoqueMap[p.produto_id]) estoqueMap[p.produto_id] = 0
+      estoqueMap[p.produto_id] += Number(p.quantidade)
+    })
+
+    const vendasSemanaMap = {}
+    vendasSemana?.forEach(v => {
+      if (!vendasSemanaMap[v.produto_id]) vendasSemanaMap[v.produto_id] = 0
+      vendasSemanaMap[v.produto_id] += Number(v.quantidade)
+    })
+
+    const sugestoes = produtos.map(p => {
+      const estoqueAtual = estoqueMap[p.id] || 0
+      const vendaSemanal = vendasSemanaMap[p.id] || 0
+      const estoqueMinimo = Number(p.estoque_minimo) || 0
+      const estoqueIdeal = estoqueMinimo + (vendaSemanal * 2)
+      const quantidadeComprar = Math.max(0, estoqueIdeal - estoqueAtual)
+
+      let prioridade = 'ok'
+      if (estoqueAtual <= 0) prioridade = 'urgente'
+      else if (estoqueAtual < estoqueMinimo) prioridade = 'alto'
+      else if (estoqueAtual < estoqueIdeal) prioridade = 'medio'
+
+      return {
+        produto_id: p.id,
+        nome: p.nome,
+        unidade: p.unidade,
+        estoque_atual: estoqueAtual,
+        estoque_minimo: estoqueMinimo,
+        venda_semanal: vendaSemanal,
+        estoque_ideal: Number(estoqueIdeal.toFixed(3)),
+        quantidade_sugerida: Number(quantidadeComprar.toFixed(3)),
+        prioridade
+      }
+    })
+    .filter(s => s.prioridade !== 'ok')
+    .sort((a, b) => {
+      const ordem = { urgente: 0, alto: 1, medio: 2 }
+      return ordem[a.prioridade] - ordem[b.prioridade]
+    })
+
+    return res.json(sugestoes)
+  } catch (e) {
+    console.error('ERRO SUGESTAO:', e)
+    return res.status(500).json({ erro: 'Erro ao gerar sugestoes de compra' })
+  }
+}
+
+module.exports = { mediaConsumo, sugestaoCompras }
