@@ -11,6 +11,7 @@ const transferencias = require('../controllers/transferencias')
 const estoques = require('../controllers/estoques')
 const vendas = require('../controllers/vendas')
 const historico = require('../controllers/historico')
+const analytics = require('../controllers/analytics')
 
 router.post('/auth/login', auth.login)
 router.get('/auth/perfil', autenticar, auth.meuPerfil)
@@ -57,7 +58,7 @@ router.delete('/vendas/:id', autenticar, somenteAdmin, vendas.remover)
 
 router.get('/historico', autenticar, somenteAdmin, historico.listar)
 
-const analytics = require('../controllers/analytics')
 router.get('/analytics/media-consumo', autenticar, somenteAdmin, analytics.mediaConsumo)
+router.get('/analytics/sugestao-compras', autenticar, somenteAdmin, analytics.sugestaoCompras)
 
 module.exports = router
