@@ -51,7 +51,7 @@ async function buscarPorId(req, res) {
 }
 
 async function criar(req, res) {
-  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, valor_venda } = req.body
+  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, valor_venda, dias_validade } = req.body
   if (!sku || !nome || !categoria_id || !tipo) {
     return res.status(400).json({ erro: 'sku, nome, categoria_id e tipo sao obrigatorios' })
   }
@@ -68,7 +68,8 @@ async function criar(req, res) {
       tipo,
       unidade: unidade || 'un',
       estoque_minimo: estoque_minimo || 0,
-      valor_venda: valor_venda || 0
+      valor_venda: valor_venda || 0,
+      dias_validade: dias_validade || null
     })
     .select('*, categorias(id, nome)').single()
   if (error) {
@@ -80,7 +81,7 @@ async function criar(req, res) {
 
 async function atualizar(req, res) {
   const { id } = req.params
-  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, ativo, valor_venda } = req.body
+  const { sku, nome, descricao, categoria_id, tipo, unidade, estoque_minimo, ativo, valor_venda, dias_validade } = req.body
   const updates = {}
   if (sku !== undefined) updates.sku = sku
   if (nome !== undefined) updates.nome = nome
@@ -91,6 +92,7 @@ async function atualizar(req, res) {
   if (estoque_minimo !== undefined) updates.estoque_minimo = estoque_minimo
   if (ativo !== undefined) updates.ativo = ativo
   if (valor_venda !== undefined) updates.valor_venda = valor_venda
+  if (dias_validade !== undefined) updates.dias_validade = dias_validade || null
   console.log('UPDATE produto id:', id, 'updates:', JSON.stringify(updates))
   const { data: updated, error } = await supabase.from('produtos').update(updates).eq('id', id).select()
   console.log('UPDATE resultado:', JSON.stringify(updated), 'ERROR:', JSON.stringify(error))
