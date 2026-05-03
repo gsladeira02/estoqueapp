@@ -12,6 +12,7 @@ const estoques = require('../controllers/estoques')
 const vendas = require('../controllers/vendas')
 const historico = require('../controllers/historico')
 const analytics = require('../controllers/analytics')
+const fichas = require('../controllers/fichas')
 
 router.post('/auth/login', auth.login)
 router.get('/auth/perfil', autenticar, auth.meuPerfil)
@@ -60,5 +61,10 @@ router.get('/historico', autenticar, somenteAdmin, historico.listar)
 
 router.get('/analytics/media-consumo', autenticar, somenteAdmin, analytics.mediaConsumo)
 router.get('/analytics/sugestao-compras', autenticar, somenteAdmin, analytics.sugestaoCompras)
+
+// Fichas técnicas
+router.get('/fichas/:produto_id', autenticar, fichas.listar)
+router.post('/fichas/:produto_id', autenticar, somenteAdmin, fichas.salvar)
+router.delete('/fichas/item/:id', autenticar, somenteAdmin, fichas.removerItem)
 
 module.exports = router
