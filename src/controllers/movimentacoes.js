@@ -7,8 +7,8 @@ async function listar(req, res) {
   let query = supabase
     .from('movimentacoes')
     .select(`
-      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total,
-      produtos(id, sku, nome, unidade),
+      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total, finalidade,
+      produtos(id, sku, nome, unidade, tipo),
       centros(id, nome, estoques(nome)),
       usuarios(id, nome)
     `, { count: 'exact' })
@@ -37,7 +37,7 @@ async function listar(req, res) {
 }
 
 async function registrar(req, res) {
-  const { produto_id, centro_id, tipo, quantidade, motivo, documento, custo_unitario, data_validade } = req.body
+  const { produto_id, centro_id, tipo, quantidade, motivo, documento, custo_unitario, data_validade, finalidade } = req.body
 
   if (!produto_id || !centro_id || !tipo || !quantidade) {
     return res.status(400).json({ erro: 'produto_id, centro_id, tipo e quantidade sao obrigatorios' })
@@ -47,6 +47,16 @@ async function registrar(req, res) {
   }
   if (Number(quantidade) <= 0) {
     return res.status(400).json({ erro: 'quantidade deve ser maior que zero' })
+  }
+
+  const { data: produto } = await supabase
+    .from('produtos')
+    .select('tipo')
+    .eq('id', produto_id)
+    .single()
+
+  if (produto?.tipo === 'ambos' && !finalidade) {
+    return res.status(400).json({ erro: 'Para produtos do tipo ambos, informe a finalidade (materia_prima ou revenda)' })
   }
 
   if (tipo === 'saida') {
@@ -79,10 +89,11 @@ async function registrar(req, res) {
       documento,
       custo_unitario: custo_unitario ? Number(custo_unitario) : null,
       data_validade: data_validade || null,
+      finalidade: produto?.tipo === 'ambos' ? finalidade : null,
     })
     .select(`
-      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total,
-      produtos(sku, nome, unidade),
+      id, tipo, quantidade, motivo, documento, criado_em, data_validade, custo_unitario, custo_total, finalidade,
+      produtos(sku, nome, unidade, tipo),
       centros(nome, estoques(nome))
     `)
     .single()
@@ -133,12 +144,11 @@ async function alertasValidade(req, res) {
       .select('centro_id')
       .eq('usuario_id', req.usuario.id)
     const ids = (acessos || []).map(a => a.centro_id)
-    if (ids.length === 0) return res.json([])
+    if (ids.length === 0) return res.json({ vencendo: [], vencidos: [] })
     query = query.in('centro_id', ids)
   }
 
-  const { data, error } = await query
-  if (error) return res.status(500).json({ erro: 'Erro ao buscar alertas de validade' })
+  const { data } = await query
 
   const vencidos = await supabase
     .from('movimentacoes')
