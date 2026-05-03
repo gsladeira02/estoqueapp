@@ -31,7 +31,6 @@ async function registrar(req, res) {
   const qtdVenda = Number(quantidade)
   const valor_total = qtdVenda * Number(valor_unitario)
 
-  // ── 1. Busca ficha técnica do produto ──────────────────────────────────
   const { data: ficha } = await supabase
     .from('fichas_tecnicas')
     .select('insumo_id, quantidade, unidade')
@@ -39,7 +38,6 @@ async function registrar(req, res) {
 
   const temFicha = ficha && ficha.length > 0
 
-  // ── 2. Se tem ficha, verifica saldo de cada insumo antes de registrar ──
   if (temFicha) {
     for (const item of ficha) {
       const qtdNecessaria = item.quantidade * qtdVenda
@@ -70,7 +68,6 @@ async function registrar(req, res) {
     }
   }
 
-  // ── 3. Registra a venda ────────────────────────────────────────────────
   const { data: venda, error: errVenda } = await supabase
     .from('vendas')
     .insert({
@@ -91,13 +88,12 @@ async function registrar(req, res) {
     return res.status(500).json({ erro: 'Erro ao registrar venda' })
   }
 
-  // ── 4. Dá baixa automática nos insumos da ficha técnica ───────────────
   const saidasRegistradas = []
   if (temFicha) {
     for (const item of ficha) {
       const qtdBaixa = item.quantidade * qtdVenda
 
-      const { data: mov, error: errMov } = await supabase
+      const { data: mov } = await supabase
         .from('movimentacoes')
         .insert({
           produto_id: item.insumo_id,
@@ -105,19 +101,14 @@ async function registrar(req, res) {
           usuario_id: req.usuario.id,
           tipo: 'saida',
           quantidade: qtdBaixa,
-          motivo: `Venda automática — venda #${venda.id}`,
+          motivo: `Venda automatica — venda #${venda.id}`,
           documento: venda.id,
           finalidade: null
         })
         .select('id, quantidade, produto_id')
         .single()
 
-      if (errMov) {
-        console.error('ERRO BAIXA INSUMO:', JSON.stringify(errMov))
-        // Não cancela a venda, mas avisa
-      } else {
-        saidasRegistradas.push(mov)
-      }
+      if (mov) saidasRegistradas.push(mov)
     }
   }
 
@@ -130,9 +121,56 @@ async function registrar(req, res) {
 
 async function remover(req, res) {
   const { id } = req.params
+
+  // Busca dados da venda antes de remover
+  const { data: venda, error: erroVenda } = await supabase
+    .from('vendas')
+    .select('id, produto_id, centro_id, quantidade, usuario_id')
+    .eq('id', id)
+    .single()
+
+  if (erroVenda || !venda) return res.status(404).json({ erro: 'Venda nao encontrada' })
+
+  // Verifica se tem ficha técnica
+  const { data: ficha } = await supabase
+    .from('fichas_tecnicas')
+    .select('insumo_id, quantidade')
+    .eq('produto_id', venda.produto_id)
+
+  // Remove a venda
   const { error } = await supabase.from('vendas').delete().eq('id', id)
   if (error) return res.status(500).json({ erro: 'Erro ao remover venda' })
-  return res.json({ mensagem: 'Venda removida com sucesso' })
+
+  // Estorna os insumos se tiver ficha
+  const estornos = []
+  if (ficha && ficha.length > 0) {
+    for (const item of ficha) {
+      const qtdEstorno = item.quantidade * venda.quantidade
+
+      const { data: mov } = await supabase
+        .from('movimentacoes')
+        .insert({
+          produto_id: item.insumo_id,
+          centro_id: venda.centro_id,
+          usuario_id: req.usuario.id,
+          tipo: 'entrada',
+          quantidade: qtdEstorno,
+          motivo: `Estorno de venda — venda #${id}`,
+          documento: id,
+          finalidade: null
+        })
+        .select('id, quantidade, produto_id')
+        .single()
+
+      if (mov) estornos.push(mov)
+    }
+  }
+
+  return res.json({
+    mensagem: 'Venda removida com sucesso',
+    estornos_realizados: estornos.length,
+    ficha_aplicada: ficha && ficha.length > 0
+  })
 }
 
 module.exports = { listar, registrar, remover }
