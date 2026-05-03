@@ -1,73 +1,74 @@
--- =============================================
--- FICHA TÉCNICA
--- Relaciona produto de venda com seus insumos
--- =============================================
+const supabase = require('../lib/supabase')
 
-CREATE TABLE IF NOT EXISTS fichas_tecnicas (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  produto_id    uuid NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
-  insumo_id     uuid NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
-  quantidade    numeric(12,4) NOT NULL CHECK (quantidade > 0),
-  unidade       text NOT NULL DEFAULT 'un',
-  observacao    text,
-  criado_em     timestamptz NOT NULL DEFAULT now(),
-  atualizado_em timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (produto_id, insumo_id)
-);
+// Lista todos os insumos da ficha técnica de um produto
+async function listar(req, res) {
+  const { produto_id } = req.params
 
--- Índices para performance
-CREATE INDEX IF NOT EXISTS idx_fichas_produto ON fichas_tecnicas(produto_id);
-CREATE INDEX IF NOT EXISTS idx_fichas_insumo  ON fichas_tecnicas(insumo_id);
+  const { data, error } = await supabase
+    .from('fichas_tecnicas')
+    .select(`
+      id, quantidade, unidade, observacao,
+      insumos:insumo_id (id, nome, unidade, tipo)
+    `)
+    .eq('produto_id', produto_id)
+    .order('criado_em')
 
--- Atualiza automaticamente o campo atualizado_em
-CREATE OR REPLACE FUNCTION atualizar_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.atualizado_em = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  if (error) return res.status(500).json({ erro: 'Erro ao buscar ficha tecnica' })
+  return res.json(data)
+}
 
-DROP TRIGGER IF EXISTS trg_fichas_tecnicas_ts ON fichas_tecnicas;
-CREATE TRIGGER trg_fichas_tecnicas_ts
-  BEFORE UPDATE ON fichas_tecnicas
-  FOR EACH ROW EXECUTE FUNCTION atualizar_timestamp();
+// Salva a ficha técnica completa de um produto (substitui os itens)
+async function salvar(req, res) {
+  const { produto_id } = req.params
+  const { itens } = req.body
 
--- RLS: desabilita (a API usa service role key)
-ALTER TABLE fichas_tecnicas DISABLE ROW LEVEL SECURITY;-- =============================================
--- FICHA TÉCNICA
--- Relaciona produto de venda com seus insumos
--- =============================================
+  if (!Array.isArray(itens)) {
+    return res.status(400).json({ erro: 'itens deve ser um array' })
+  }
 
-CREATE TABLE IF NOT EXISTS fichas_tecnicas (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  produto_id    uuid NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
-  insumo_id     uuid NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
-  quantidade    numeric(12,4) NOT NULL CHECK (quantidade > 0),
-  unidade       text NOT NULL DEFAULT 'un',
-  observacao    text,
-  criado_em     timestamptz NOT NULL DEFAULT now(),
-  atualizado_em timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (produto_id, insumo_id)
-);
+  for (const item of itens) {
+    if (!item.insumo_id || !item.quantidade || Number(item.quantidade) <= 0) {
+      return res.status(400).json({ erro: 'Cada item deve ter insumo_id e quantidade > 0' })
+    }
+  }
 
--- Índices para performance
-CREATE INDEX IF NOT EXISTS idx_fichas_produto ON fichas_tecnicas(produto_id);
-CREATE INDEX IF NOT EXISTS idx_fichas_insumo  ON fichas_tecnicas(insumo_id);
+  const { error: delError } = await supabase
+    .from('fichas_tecnicas')
+    .delete()
+    .eq('produto_id', produto_id)
 
--- Atualiza automaticamente o campo atualizado_em
-CREATE OR REPLACE FUNCTION atualizar_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.atualizado_em = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  if (delError) return res.status(500).json({ erro: 'Erro ao atualizar ficha tecnica' })
 
-DROP TRIGGER IF EXISTS trg_fichas_tecnicas_ts ON fichas_tecnicas;
-CREATE TRIGGER trg_fichas_tecnicas_ts
-  BEFORE UPDATE ON fichas_tecnicas
-  FOR EACH ROW EXECUTE FUNCTION atualizar_timestamp();
+  if (itens.length === 0) {
+    return res.json({ mensagem: 'Ficha tecnica limpa com sucesso' })
+  }
 
--- RLS: desabilita (a API usa service role key)
-ALTER TABLE fichas_tecnicas DISABLE ROW LEVEL SECURITY;
+  const registros = itens.map(item => ({
+    produto_id,
+    insumo_id: item.insumo_id,
+    quantidade: Number(item.quantidade),
+    unidade: item.unidade || 'un',
+    observacao: item.observacao || null
+  }))
+
+  const { data, error } = await supabase
+    .from('fichas_tecnicas')
+    .insert(registros)
+    .select(`
+      id, quantidade, unidade, observacao,
+      insumos:insumo_id (id, nome, unidade, tipo)
+    `)
+
+  if (error) return res.status(500).json({ erro: 'Erro ao salvar ficha tecnica' })
+  return res.status(201).json(data)
+}
+
+// Remove um item específico da ficha
+async function removerItem(req, res) {
+  const { id } = req.params
+  const { error } = await supabase.from('fichas_tecnicas').delete().eq('id', id)
+  if (error) return res.status(500).json({ erro: 'Erro ao remover item da ficha' })
+  return res.json({ mensagem: 'Item removido' })
+}
+
+module.exports = { listar, salvar, removerItem }
