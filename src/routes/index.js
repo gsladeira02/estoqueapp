@@ -13,6 +13,7 @@ const vendas = require('../controllers/vendas')
 const historico = require('../controllers/historico')
 const analytics = require('../controllers/analytics')
 const fichas = require('../controllers/fichas')
+const categoriasVenda = require('../controllers/categorias-venda')
 
 router.post('/auth/login', auth.login)
 router.get('/auth/perfil', autenticar, auth.meuPerfil)
@@ -27,6 +28,10 @@ router.delete('/usuarios/:id', autenticar, somenteAdmin, usuarios.remover)
 router.get('/categorias', autenticar, produtos.listarCategorias)
 router.post('/categorias', autenticar, somenteAdmin, produtos.criarCategoria)
 router.put('/categorias/:id', autenticar, somenteAdmin, produtos.atualizarCategoria)
+
+router.get('/categorias-venda', autenticar, categoriasVenda.listar)
+router.post('/categorias-venda', autenticar, somenteAdmin, categoriasVenda.criar)
+router.put('/categorias-venda/:id', autenticar, somenteAdmin, categoriasVenda.atualizar)
 
 router.get('/produtos', autenticar, produtos.listar)
 router.get('/produtos/:id', autenticar, produtos.buscarPorId)
@@ -62,7 +67,6 @@ router.get('/historico', autenticar, somenteAdmin, historico.listar)
 router.get('/analytics/media-consumo', autenticar, somenteAdmin, analytics.mediaConsumo)
 router.get('/analytics/sugestao-compras', autenticar, somenteAdmin, analytics.sugestaoCompras)
 
-// Fichas técnicas
 router.get('/fichas/:produto_id', autenticar, fichas.listar)
 router.post('/fichas/:produto_id', autenticar, somenteAdmin, fichas.salvar)
 router.delete('/fichas/item/:id', autenticar, somenteAdmin, fichas.removerItem)
