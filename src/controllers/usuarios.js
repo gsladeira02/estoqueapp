@@ -83,12 +83,19 @@ async function atualizar(req, res) {
 async function remover(req, res) {
   const { id } = req.params
 
-  // Remove acessos a centros primeiro (chave estrangeira)
+  // Remove vínculos de acesso a centros
   await supabase.from('acesso_centros').delete().eq('usuario_id', id)
+
+  // Anula referências nas outras tabelas
+  await supabase.from('transferencias').update({ solicitante_id: null }).eq('solicitante_id', id)
+  await supabase.from('transferencias').update({ admin_id: null }).eq('admin_id', id)
+  await supabase.from('movimentacoes').update({ usuario_id: null }).eq('usuario_id', id)
+  await supabase.from('vendas').update({ usuario_id: null }).eq('usuario_id', id)
+  await supabase.from('historico_alteracoes').update({ usuario_id: null }).eq('usuario_id', id)
 
   // Apaga o usuario
   const { error } = await supabase.from('usuarios').delete().eq('id', id)
-  if (error) return res.status(500).json({ erro: 'Erro ao apagar usuario' })
+  if (error) return res.status(500).json({ erro: 'Erro ao apagar usuario: ' + error.message })
   return res.json({ mensagem: 'Usuario apagado com sucesso' })
 }
 
