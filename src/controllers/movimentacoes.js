@@ -49,14 +49,22 @@ async function registrar(req, res) {
     return res.status(400).json({ erro: 'quantidade deve ser maior que zero' })
   }
 
+  // Busca produto com fator de conversão
   const { data: produto } = await supabase
     .from('produtos')
-    .select('tipo')
+    .select('tipo, fator_conversao, unidade_insumo')
     .eq('id', produto_id)
     .single()
 
   if (produto?.tipo === 'ambos' && !finalidade) {
     return res.status(400).json({ erro: 'Para produtos do tipo ambos, informe a finalidade (materia_prima ou revenda)' })
+  }
+
+  // Aplica conversão na entrada se produto tiver fator definido
+  let qtdFinal = Number(quantidade)
+  const temConversao = tipo === 'entrada' && produto?.fator_conversao && produto?.unidade_insumo
+  if (temConversao) {
+    qtdFinal = Number(quantidade) * Number(produto.fator_conversao)
   }
 
   if (tipo === 'saida') {
@@ -84,8 +92,10 @@ async function registrar(req, res) {
       centro_id,
       usuario_id: req.usuario.id,
       tipo,
-      quantidade: Number(quantidade),
-      motivo,
+      quantidade: qtdFinal,
+      motivo: temConversao
+        ? (motivo || '') + ` (convertido: ${Number(quantidade)} un → ${qtdFinal} ${produto.unidade_insumo})`
+        : motivo,
       documento,
       custo_unitario: custo_unitario ? Number(custo_unitario) : null,
       data_validade: data_validade || null,
@@ -113,6 +123,11 @@ async function registrar(req, res) {
   return res.status(201).json({
     movimentacao: data,
     saldo_atual: posicao?.quantidade || 0,
+    conversao_aplicada: temConversao ? {
+      quantidade_informada: Number(quantidade),
+      quantidade_registrada: qtdFinal,
+      unidade_destino: produto.unidade_insumo
+    } : null
   })
 }
 
