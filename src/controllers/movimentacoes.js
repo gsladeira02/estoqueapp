@@ -1,4 +1,6 @@
+// src/controllers/movimentacoes.js
 const supabase = require('../lib/supabase')
+const { registrar: registrarHistorico } = require('./historico')
 
 async function listar(req, res) {
   const { centro_id, produto_id, tipo, data_inicio, data_fim, limite = 50, pagina = 1 } = req.query
@@ -16,10 +18,7 @@ async function listar(req, res) {
     .range(offset, offset + Number(limite) - 1)
 
   if (req.usuario.papel === 'operador') {
-    const { data: acessos } = await supabase
-      .from('acesso_centros')
-      .select('centro_id')
-      .eq('usuario_id', req.usuario.id)
+    const { data: acessos } = await supabase.from('acesso_centros').select('centro_id').eq('usuario_id', req.usuario.id)
     const ids = (acessos || []).map(a => a.centro_id)
     if (ids.length === 0) return res.json({ dados: [], total: 0 })
     query = query.in('centro_id', ids)
@@ -49,7 +48,6 @@ async function registrar(req, res) {
     return res.status(400).json({ erro: 'quantidade deve ser maior que zero' })
   }
 
-  // Busca produto com fator de conversão
   const { data: produto } = await supabase
     .from('produtos')
     .select('tipo, fator_conversao, unidade_insumo')
@@ -60,7 +58,6 @@ async function registrar(req, res) {
     return res.status(400).json({ erro: 'Para produtos do tipo ambos, informe a finalidade (materia_prima ou revenda)' })
   }
 
-  // Aplica conversão na entrada se produto tiver fator definido
   let qtdFinal = Number(quantidade)
   const temConversao = tipo === 'entrada' && produto?.fator_conversao && produto?.unidade_insumo
   if (temConversao) {
@@ -69,33 +66,22 @@ async function registrar(req, res) {
 
   if (tipo === 'saida') {
     const { data: posicao } = await supabase
-      .from('posicoes_estoque')
-      .select('quantidade')
-      .eq('produto_id', produto_id)
-      .eq('centro_id', centro_id)
-      .single()
-
+      .from('posicoes_estoque').select('quantidade')
+      .eq('produto_id', produto_id).eq('centro_id', centro_id).single()
     const saldo = posicao?.quantidade || 0
     if (saldo < Number(quantidade)) {
-      return res.status(422).json({
-        erro: 'Saldo insuficiente',
-        saldo_disponivel: saldo,
-        quantidade_solicitada: Number(quantidade)
-      })
+      return res.status(422).json({ erro: 'Saldo insuficiente', saldo_disponivel: saldo, quantidade_solicitada: Number(quantidade) })
     }
   }
 
   const { data, error } = await supabase
     .from('movimentacoes')
     .insert({
-      produto_id,
-      centro_id,
+      produto_id, centro_id,
       usuario_id: req.usuario.id,
       tipo,
       quantidade: qtdFinal,
-      motivo: temConversao
-        ? (motivo || '') + ` (convertido: ${Number(quantidade)} un → ${qtdFinal} ${produto.unidade_insumo})`
-        : motivo,
+      motivo: temConversao ? (motivo || '') + ` (convertido: ${Number(quantidade)} un → ${qtdFinal} ${produto.unidade_insumo})` : motivo,
       documento,
       custo_unitario: custo_unitario ? Number(custo_unitario) : null,
       data_validade: data_validade || null,
@@ -113,21 +99,16 @@ async function registrar(req, res) {
     return res.status(500).json({ erro: error.message || 'Erro ao registrar movimentacao' })
   }
 
+  await registrarHistorico(req.usuario.id, 'movimentacoes', data.id, 'criacao', null, { produto_id, centro_id, tipo, quantidade: qtdFinal, motivo })
+
   const { data: posicao } = await supabase
-    .from('posicoes_estoque')
-    .select('quantidade')
-    .eq('produto_id', produto_id)
-    .eq('centro_id', centro_id)
-    .single()
+    .from('posicoes_estoque').select('quantidade')
+    .eq('produto_id', produto_id).eq('centro_id', centro_id).single()
 
   return res.status(201).json({
     movimentacao: data,
     saldo_atual: posicao?.quantidade || 0,
-    conversao_aplicada: temConversao ? {
-      quantidade_informada: Number(quantidade),
-      quantidade_registrada: qtdFinal,
-      unidade_destino: produto.unidade_insumo
-    } : null
+    conversao_aplicada: temConversao ? { quantidade_informada: Number(quantidade), quantidade_registrada: qtdFinal, unidade_destino: produto.unidade_insumo } : null
   })
 }
 
@@ -136,17 +117,12 @@ async function alertasValidade(req, res) {
   const hoje = new Date()
   const limite = new Date()
   limite.setDate(hoje.getDate() + Number(dias))
-
   const hojeStr = hoje.toISOString().split('T')[0]
   const limiteStr = limite.toISOString().split('T')[0]
 
   let query = supabase
     .from('movimentacoes')
-    .select(`
-      id, tipo, quantidade, data_validade, criado_em,
-      produtos(id, nome, unidade),
-      centros(id, nome, estoques(nome))
-    `)
+    .select(`id, tipo, quantidade, data_validade, criado_em, produtos(id, nome, unidade), centros(id, nome, estoques(nome))`)
     .eq('tipo', 'entrada')
     .not('data_validade', 'is', null)
     .lte('data_validade', limiteStr)
@@ -154,29 +130,20 @@ async function alertasValidade(req, res) {
     .order('data_validade', { ascending: true })
 
   if (req.usuario.papel === 'operador') {
-    const { data: acessos } = await supabase
-      .from('acesso_centros')
-      .select('centro_id')
-      .eq('usuario_id', req.usuario.id)
+    const { data: acessos } = await supabase.from('acesso_centros').select('centro_id').eq('usuario_id', req.usuario.id)
     const ids = (acessos || []).map(a => a.centro_id)
     if (ids.length === 0) return res.json({ vencendo: [], vencidos: [] })
     query = query.in('centro_id', ids)
   }
 
   const { data } = await query
-
   const vencidos = await supabase
     .from('movimentacoes')
     .select(`id, tipo, quantidade, data_validade, criado_em, produtos(id, nome, unidade), centros(id, nome, estoques(nome))`)
-    .eq('tipo', 'entrada')
-    .not('data_validade', 'is', null)
-    .lt('data_validade', hojeStr)
-    .order('data_validade', { ascending: true })
+    .eq('tipo', 'entrada').not('data_validade', 'is', null)
+    .lt('data_validade', hojeStr).order('data_validade', { ascending: true })
 
-  return res.json({
-    vencendo: data || [],
-    vencidos: vencidos.data || []
-  })
+  return res.json({ vencendo: data || [], vencidos: vencidos.data || [] })
 }
 
 module.exports = { listar, registrar, alertasValidade }
