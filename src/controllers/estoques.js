@@ -96,4 +96,11 @@ async function painelGeral(req, res) {
   })
 }
 
-module.exports = { listarEstoques, criarEstoque, atualizarEstoque, listarCentros, criarCentro, atualizarCentro, posicaoEstoque, painelGeral }
+async function listarTodosCentros(req, res) {
+  const { data, error } = await supabase
+    .from('centros').select('*, estoques(id, nome)').eq('ativo', true).order('nome')
+  if (error) return res.status(500).json({ erro: 'Erro ao listar centros' })
+  return res.json(data)
+}
+
+module.exports = { listarEstoques, criarEstoque, atualizarEstoque, listarCentros, listarTodosCentros, criarCentro, atualizarCentro, posicaoEstoque, painelGeral }
