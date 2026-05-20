@@ -31,10 +31,18 @@ async function solicitar(req, res) {
     return res.status(400).json({ erro: 'Para produtos do tipo ambos, informe a finalidade: revenda ou materia_prima' })
   }
 
-  const { data: posicao } = await supabase.from('posicoes_estoque').select('quantidade').eq('produto_id', produto_id).eq('centro_id', centro_origem_id).single()
+  // Busca saldo — se não tiver posição, saldo é 0 (não bloqueia, deixa a aprovação verificar)
+  const { data: posicao } = await supabase
+    .from('posicoes_estoque').select('quantidade')
+    .eq('produto_id', produto_id).eq('centro_id', centro_origem_id).single()
   const saldo = posicao?.quantidade || 0
+
   if (saldo < Number(quantidade)) {
-    return res.status(422).json({ erro: 'Saldo insuficiente no centro de origem', saldo_disponivel: saldo, quantidade_solicitada: Number(quantidade) })
+    return res.status(422).json({
+      erro: 'Saldo insuficiente no centro de origem',
+      saldo_disponivel: saldo,
+      quantidade_solicitada: Number(quantidade)
+    })
   }
 
   let quantidade_destino = Number(quantidade)
@@ -76,11 +84,10 @@ async function resolver(req, res) {
   if (transferencia.status !== 'pendente') return res.status(409).json({ erro: 'Transferencia ja resolvida' })
 
   if (acao === 'aprovar') {
+    // Verifica se já existe movimentação de saída para esta transferência (evita dupla aprovação)
     const { data: movsExistentes } = await supabase
-      .from('movimentacoes')
-      .select('id')
-      .eq('documento', id)
-      .eq('tipo', 'saida')
+      .from('movimentacoes').select('id')
+      .eq('documento', id).eq('tipo', 'saida')
 
     const jaMovimentou = movsExistentes && movsExistentes.length > 0
 
@@ -90,11 +97,17 @@ async function resolver(req, res) {
         .eq('produto_id', transferencia.produto_id)
         .eq('centro_id', transferencia.centro_origem_id).single()
 
-      if ((posicao?.quantidade || 0) < transferencia.quantidade) {
-        return res.status(422).json({ erro: 'Saldo insuficiente no momento da aprovacao' })
+      const saldoAtual = posicao?.quantidade || 0
+
+      if (saldoAtual < transferencia.quantidade) {
+        return res.status(422).json({
+          erro: 'Saldo insuficiente no momento da aprovacao',
+          saldo_disponivel: saldoAtual,
+          quantidade_necessaria: transferencia.quantidade
+        })
       }
 
-      await supabase.from('movimentacoes').insert({
+      const { error: errSaida } = await supabase.from('movimentacoes').insert({
         produto_id: transferencia.produto_id,
         centro_id: transferencia.centro_origem_id,
         usuario_id: req.usuario.id,
@@ -105,8 +118,13 @@ async function resolver(req, res) {
         finalidade: transferencia.finalidade
       })
 
+      if (errSaida) {
+        console.error('ERRO SAIDA TRANSFERENCIA:', JSON.stringify(errSaida))
+        return res.status(500).json({ erro: 'Erro ao registrar saida da transferencia' })
+      }
+
       const qtdEntrada = transferencia.quantidade_destino || transferencia.quantidade
-      await supabase.from('movimentacoes').insert({
+      const { error: errEntrada } = await supabase.from('movimentacoes').insert({
         produto_id: transferencia.produto_id,
         centro_id: transferencia.centro_destino_id,
         usuario_id: req.usuario.id,
@@ -117,6 +135,11 @@ async function resolver(req, res) {
         finalidade: transferencia.finalidade,
         custo_unitario: null
       })
+
+      if (errEntrada) {
+        console.error('ERRO ENTRADA TRANSFERENCIA:', JSON.stringify(errEntrada))
+        return res.status(500).json({ erro: 'Erro ao registrar entrada da transferencia' })
+      }
     }
   }
 
