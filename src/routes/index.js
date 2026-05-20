@@ -1,8 +1,6 @@
 const express = require('express')
 const router = express.Router()
-
 const { autenticar, somenteAdmin, verificarAcessoCentro } = require('../middleware/auth')
-
 const auth = require('../controllers/auth')
 const usuarios = require('../controllers/usuarios')
 const produtos = require('../controllers/produtos')
@@ -14,6 +12,7 @@ const historico = require('../controllers/historico')
 const analytics = require('../controllers/analytics')
 const fichas = require('../controllers/fichas')
 const categoriasVenda = require('../controllers/categorias-venda')
+const producoes = require('../controllers/producoes')
 
 router.post('/auth/login', auth.login)
 router.get('/auth/perfil', autenticar, auth.meuPerfil)
@@ -28,6 +27,7 @@ router.delete('/usuarios/:id', autenticar, somenteAdmin, usuarios.remover)
 router.get('/categorias', autenticar, produtos.listarCategorias)
 router.post('/categorias', autenticar, somenteAdmin, produtos.criarCategoria)
 router.put('/categorias/:id', autenticar, somenteAdmin, produtos.atualizarCategoria)
+router.delete('/categorias/:id', autenticar, somenteAdmin, produtos.apagarCategoria)
 
 router.get('/categorias-venda', autenticar, categoriasVenda.listar)
 router.post('/categorias-venda', autenticar, somenteAdmin, categoriasVenda.criar)
@@ -42,6 +42,7 @@ router.get('/estoques', autenticar, estoques.listarEstoques)
 router.post('/estoques', autenticar, somenteAdmin, estoques.criarEstoque)
 router.put('/estoques/:id', autenticar, somenteAdmin, estoques.atualizarEstoque)
 
+router.get('/centros/todos', autenticar, estoques.listarTodosCentros)
 router.get('/centros', autenticar, estoques.listarCentros)
 router.post('/centros', autenticar, somenteAdmin, estoques.criarCentro)
 router.put('/centros/:id', autenticar, somenteAdmin, estoques.atualizarCentro)
@@ -70,5 +71,9 @@ router.get('/analytics/sugestao-compras', autenticar, somenteAdmin, analytics.su
 router.get('/fichas/:produto_id', autenticar, fichas.listar)
 router.post('/fichas/:produto_id', autenticar, somenteAdmin, fichas.salvar)
 router.delete('/fichas/item/:id', autenticar, somenteAdmin, fichas.removerItem)
+
+router.get('/producoes', autenticar, somenteAdmin, producoes.listar)
+router.post('/producoes', autenticar, somenteAdmin, producoes.registrar)
+router.delete('/producoes/:id', autenticar, somenteAdmin, producoes.remover)
 
 module.exports = router
