@@ -1,4 +1,3 @@
-// src/controllers/movimentacoes.js
 const supabase = require('../lib/supabase')
 const { registrar: registrarHistorico } = require('./historico')
 
@@ -38,14 +37,18 @@ async function listar(req, res) {
 async function registrar(req, res) {
   const { produto_id, centro_id, tipo, quantidade, motivo, documento, custo_unitario, data_validade, finalidade } = req.body
 
-  if (!produto_id || !centro_id || !tipo || !quantidade) {
+  if (!produto_id || !centro_id || !tipo || quantidade === undefined || quantidade === null || quantidade === '') {
     return res.status(400).json({ erro: 'produto_id, centro_id, tipo e quantidade sao obrigatorios' })
   }
   if (!['entrada', 'saida', 'ajuste'].includes(tipo)) {
     return res.status(400).json({ erro: 'tipo deve ser entrada, saida ou ajuste' })
   }
-  if (Number(quantidade) <= 0) {
+  // Ajuste permite 0, entrada e saida precisam ser > 0
+  if (tipo !== 'ajuste' && Number(quantidade) <= 0) {
     return res.status(400).json({ erro: 'quantidade deve ser maior que zero' })
+  }
+  if (tipo === 'ajuste' && Number(quantidade) < 0) {
+    return res.status(400).json({ erro: 'quantidade nao pode ser negativa' })
   }
 
   const { data: produto } = await supabase
