@@ -104,4 +104,24 @@ async function atualizar(req, res) {
   return res.json({ mensagem: 'Produto atualizado com sucesso' })
 }
 
-module.exports = { listar, buscarPorId, criar, atualizar, listarCategorias, criarCategoria, atualizarCategoria }
+async function apagarCategoria(req, res) {
+  const { id } = req.params
+
+  const { data: produtosDaCategoria } = await supabase
+    .from('produtos').select('id').eq('categoria_id', id)
+
+  if (produtosDaCategoria && produtosDaCategoria.length > 0) {
+    const ids = produtosDaCategoria.map(p => p.id)
+    await supabase.from('fichas_tecnicas').delete().in('produto_id', ids)
+    await supabase.from('fichas_tecnicas').delete().in('insumo_id', ids)
+    await supabase.from('posicoes_estoque').delete().in('produto_id', ids)
+    await supabase.from('produtos').delete().in('id', ids)
+  }
+
+  const { error } = await supabase.from('categorias').delete().eq('id', id)
+  if (error) return res.status(500).json({ erro: 'Erro ao apagar categoria: ' + error.message })
+  await registrarHistorico(req.usuario.id, 'categorias', id, 'exclusao', { id }, null)
+  return res.json({ mensagem: 'Categoria e produtos apagados com sucesso' })
+}
+
+module.exports = { listar, buscarPorId, criar, atualizar, listarCategorias, criarCategoria, atualizarCategoria, apagarCategoria }
